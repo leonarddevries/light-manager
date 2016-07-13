@@ -18,7 +18,7 @@ def setup_logging():
 
         # Initiate root logger
         logger = logging.root
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
 
         logger.handlers = []
         # Add the log message handler to the logger
