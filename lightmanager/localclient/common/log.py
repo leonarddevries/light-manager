@@ -9,7 +9,7 @@ def setup_logging():
     try:
         # Set up a specific logger with our desired output level
         home_dir = expanduser("~")
-        logfile = os.path.join(home_dir, "log", "lightmanager.log")
+        logfile = os.path.join(home_dir, "log", "lm-localclient.log")
         if not os.path.isdir(os.path.dirname(logfile)):
             os.mkdir(os.path.dirname(logfile))
         if not os.path.isfile(logfile):
