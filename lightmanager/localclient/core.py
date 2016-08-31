@@ -13,11 +13,13 @@ from threading import Thread
 
 import websocket
 import common.log
+import common.config
 import events
 
 common.log.setup_logging()
 logger = logging.getLogger(__name__)
-
+common.config.load_config(__file__)
+config = common.config.config
 
 class LightManager:
     def __init__(self):
@@ -45,18 +47,27 @@ class LightManager:
 
 class WebSocketClient:
     def __init__(self):
-        self.url = "ws://localhost:8888/ws"
+        self.url = config.get("remote", "host", default="ws://localhost:8888/ws")
+        self.key = config.get("remote", "key")
         Thread(target=self.connect).start()
 
     def connect(self):
-        self.ws = websocket.WebSocketApp(url=self.url, on_open=self.on_open, on_message=self.on_message)
-        self.ws.run_forever()
+        while True:
+            self.ws = websocket.WebSocketApp(url=self.url, on_open=self.on_open, on_message=self.on_message)
+            self.ws.run_forever()
+            time.sleep(5)
 
     def on_open(self, ws):
-        print('opened!')
+        logger.info('opened connection to {}!'.format(self.url))
 
     def on_message(self, ws, message):
-        print(message)
+        if "AUTH_OK" in message:
+            logger.info("Authentication successful!")
+        elif "AUTH" in str(message):
+            logger.info("Got authentication request, trying authentication..")
+            self.ws.send("KEY:{}".format(self.key))
+        else:
+            logger.info("Received message: {}".format(message))
 
     def on_close(self, ws, code=1000, *reason):
         pass
