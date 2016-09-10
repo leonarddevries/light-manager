@@ -10,7 +10,7 @@ import logging
 import time
 from Queue import Queue, Full
 from threading import Thread
-
+import datetime
 import websocket
 import common.log
 import common.config
@@ -29,7 +29,7 @@ class LightManager:
         self.ws = WebSocketClient()
 
     def event_callback(self, event):
-        logger.info("Got event: {}".format(event))
+        logger.debug("Got event: {}".format(event))
         self.ws.send(message=str(event))
 
     def run(self):
@@ -41,6 +41,7 @@ class WebSocketClient:
     def __init__(self):
         self.logger = logging.getLogger("core.websocketclient")
         self.authenticated = False
+        self.connected = False
         self.url = config.get("remote", "host", default="ws://localhost:8888/ws")
         self.key = config.get("remote", "key")
         self.pool = Queue(maxsize=config.get("client", "message_pool_size", default=10))
@@ -56,12 +57,15 @@ class WebSocketClient:
         self._mb.daemon = True
         self._mb.start()
         self.logger.info("Launched message broker")
+        self._cs = Thread(target=self._con_status, name="connection_monitor")
+        self._cs.daemon = True
+        self._cs.start()
+        self.logger.info("Launched connection status monitor")
 
     def _keep_connected(self):
         time.sleep(1)
         while True:
             try:
-                self.logger.info("Opening websocket connection to {}...".format(self.url))
                 self.ws = websocket.WebSocketApp(url=self.url,
                                                  on_open=self.on_open,
                                                  on_message=self.on_message)
@@ -70,7 +74,9 @@ class WebSocketClient:
             except:
                 self.logger.exception("Unhandled exception")
             finally:
-                self.logger.info("Connection closed")
+                if self.connected:
+                    self.connected = False
+                    self.logger.info("Connection closed")
                 self.authenticated = False
 
     def _message_broker(self):
@@ -92,7 +98,25 @@ class WebSocketClient:
             finally:
                 self.pool.task_done()
 
+    def _con_status(self):
+        intervals = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]  # fibonacci
+        current = 0
+        last_connected = datetime.datetime.now()
+
+        while True:
+            time.sleep(5)
+            if self.connected:
+                current = 0
+                last_connected = datetime.datetime.now()
+            else:
+                disconnect_time = int((datetime.datetime.now() - last_connected).total_seconds()/60)
+                if disconnect_time > intervals[current]:
+                    current += 1
+                    logger.warning("Connection lost for {} minutes".format(disconnect_time))
+
+
     def on_open(self, ws):
+        self.connected = True
         self.logger.info("Connection opened")
 
     def on_message(self, ws, message):
