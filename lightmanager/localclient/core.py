@@ -15,6 +15,7 @@ import websocket
 import common.log
 import common.config
 import events
+import ssl
 
 common.log.setup_logging()
 logger = logging.getLogger("core")
@@ -69,7 +70,7 @@ class WebSocketClient:
                 self.ws = websocket.WebSocketApp(url=self.url,
                                                  on_open=self.on_open,
                                                  on_message=self.on_message)
-                self.ws.run_forever()
+                self.ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
                 time.sleep(5)
             except:
                 self.logger.exception("Unhandled exception")
@@ -99,7 +100,6 @@ class WebSocketClient:
                 self.pool.task_done()
 
     def _con_status(self):
-        intervals = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]  # fibonacci
         current = 0
         last_connected = datetime.datetime.now()
 
@@ -110,10 +110,9 @@ class WebSocketClient:
                 last_connected = datetime.datetime.now()
             else:
                 disconnect_time = int((datetime.datetime.now() - last_connected).total_seconds()/60)
-                if disconnect_time > intervals[current]:
+                if disconnect_time > get_fibonacci(current):
                     current += 1
                     logger.warning("Connection lost for {} minutes".format(disconnect_time))
-
 
     def on_open(self, ws):
         self.connected = True
@@ -141,6 +140,14 @@ class WebSocketClient:
             self.pool.put_nowait(message)
         except Full:
             self.logger.error("Queue full, message {} lost".format(message))
+
+
+def get_fibonacci(n):
+    a, b = 1, 2  # Skip the first 0, 1 sequence.
+    while n > 0:
+        a, b = b, a + b
+        n -= 1
+    return a
 
 
 def run():
